@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""
+usage: ./format <filepaths>...
+
+Format script for lettering. Makes everything lowercase except pronoun 'I'.
+"""
+
+import os
+import sys
+import re
+
+def main(argv: list) -> None:
+    if not argv:
+        print("usage: ./format <filepaths>...")
+
+    for filename in argv:
+        if os.path.exists(filename):
+            with open(filename, mode="r+", encoding="utf-8") as f:
+                lines = f.readlines()
+                lines = [process(x) for x in lines]
+                f.seek(0)
+                f.writelines(lines)
+
+        else:
+            print(f"Couldn't find file {filename}")
+
+
+def process(line: str) -> str:
+    line = re.sub(r"[‘’']", r"'", line.lower())
+    return re.sub(r"(^|\W)i(?:(')(ll|ve|d|m))?($|\W)", r"\1I\2\3\4", line)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
