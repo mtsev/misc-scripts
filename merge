@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+"""
+usage: ./merge <sparc_csv> <gform_csv> <out_csv>
+
+Merge SpArc membership and google form membership CSV files for lofisoc.
+"""
+
+import csv
+import re
+import sys
+from pathlib import Path
+
+def main(argv: list) -> None:
+    if len(argv) != 3:
+        print("usage: ./merge <sparc_csv> <gform_csv> <out_csv>")
+        return
+
+    sparc = Path(argv[0])
+    gform = Path(argv[1])
+    out = Path(argv[2])
+
+    # Parse sparc file
+    # Input fields: First Name, Last Name, Email, etc.
+    if sparc.is_file() and sparc.suffix == ".csv":
+        sparc_list = []
+        with sparc.open(mode="r") as f:
+            reader = csv.reader(f, delimiter=',')
+            next(reader)
+            for row in reader:
+                sparc_list.append(process_sparc(row))
+    else:
+        print(f"error: invalid SpArc file {argv[0]}")
+        return
+
+    # Parse gform file
+    # Input fields: Timestamp, Full Name, Arc, zID, Email, SpArc, etc.
+    if gform.is_file() and gform.suffix == ".csv":
+        gform_list = []
+        with gform.open(mode="r") as f:
+            reader = csv.reader(f, delimiter=',', quotechar='"')
+            next(reader)
+            for row in reader:
+                gform_list.append(process_gform(row))
+    else:
+        print(f"error: invalid Google Form file {argv[0]}")
+        return
+
+    # If the output file already exists, rename it
+    if out.is_file():
+        oldfile = out.name + '.old'
+        out.replace(oldfile)
+        print(f"Moved existing file '{out.name}' to '{oldfile}'")
+
+    # Output fields:
+    # Merge Type, Full Name, zID, Email, Arc Member, SpArc
+    merged_list = merge(sparc_list, gform_list)
+    with out.open(mode="w") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Type", "Name", "zID", "Email", "Arc", "SpArc"])
+        writer.writerows(merged_list)
+
+    print(f"Files have been merged into {out.name}")
+
+
+# Dict fields: names[], email, zid
+def process_sparc(row: list) -> dict:
+    # Map row to dictionary
+    d = {}
+
+    # Add name as list of tokens, lowercase
+    d['names'] = row[0].lower().split()
+    d['names'] += row[1].lower().split()
+    d['email'] = row[2].lower()
+
+    # Get zID from email if applicable
+    m = re.match(r"(z5[\d]{6})@", row[2].lower())
+    d['zid'] = m.group(1) if m else None
+
+    # Return dictionary of row
+    return d
+
+
+# Dict fields: names[], arc, zid, email, sparc
+def process_gform(row: list) -> None:
+    # Map row to dictionary
+    d = {}
+
+    # Add name as list of tokens, lowercase
+    d['names'] = row[1].lower().split()
+    d['email'] = row[4].lower()
+
+    # Add zID if applicable
+    m = re.match(r"z?(5[\d]{6})$", row[3].lower())
+    d['zid'] = 'z' + m.group(1) if m else None
+    
+    # Add Arc and SpArc membership as booleans
+    d['arc'] = (row[2] == "Yes")
+    d['sparc'] = (row[6] == "Yes")
+
+    # Return dictionary of row
+    return d
+
+
+### To merge, match any:
+#   - one of: email, zID
+#   - two of: names, (email substring?)
+def merge(sparc: list, gform: list) -> list:
+    # Return list of lists, each row is a list
+    # Fields: Merge Type, Full Name, zID, Email, Arc Member, SpArc
+    merged = []
+
+    # Macro for merging rows
+    def row(s, g):
+        merged.append(merge_row(s, g))
+        sparc.remove(s)
+        gform.remove(g)
+
+    # Merge any rows that match
+    for s in reversed(sparc):
+        for g in reversed(gform):
+
+            # Email match
+            if g['email'] and s['email'] == g['email']:
+                # print(f"email match for {' '.join(s['names'])}: {s['email']}")
+                row(s, g)
+                break
+
+            # zID match
+            elif s['zid'] and s['zid'] == g['zid']:
+                # print(f"zID match for {' '.join(s['names'])}: {s['zid']}")
+                row(s, g)
+                break
+
+            # Two names match
+            names = set(s['names']).intersection(g['names'])
+            if len(names) > 1:
+                # print(f'name match: {names}')
+                row(s, g)
+                break
+
+    # Process the remaining sparc rows
+    for s in sparc:
+        merged.append([
+            'SPARC',
+            ' '.join(s['names']),
+            s['zid'],
+            s['email'],
+            'yes',
+            'yes'
+        ])
+
+    # Process the remaining gform rows
+    for g in gform:
+        merged.append([
+            'GFORM',
+            ' '.join(g['names']),
+            g['zid'],
+            g['email'],
+            'yes' if g['arc'] else 'no',
+            'yes' if g['sparc'] else 'no'
+        ])
+
+    return merged
+
+
+### Where there is conflict, use:
+#   - name:  SpArc
+#   - email: non-zID (default: SpArc)
+### Fields: Merge Type, Full Name, zID, Email, Arc Member, SpArc
+#   - Type: MERGE   merged row
+#   - Type: SPARC   sparc only row
+#   - Type: GFORM   gform only row
+def merge_row(sparc: dict, gform: dict) -> list:
+    # Merge type is always MERGE because we're merging the files
+    merged = ['MERGE']
+
+    # Use fullname from sparc
+    merged.append(' '.join(sparc['names']))
+
+    # gform probably has the zid, otherwise use whatever sparc has
+    merged.append(gform['zid'] if gform['zid'] else sparc['zid'])
+
+    # Use email from sparc unless it's zmail and gform's isn't
+    # We know sparc zid is none unless zmail is provided so check that
+    if sparc['zid'] and not re.match(r"(z5[\d]{6})@", gform['email']):
+        merged.append(gform['email'])
+    else:
+        merged.append(sparc['email'])
+
+    # Sparc match guarantees arc and sparc members
+    merged.append('yes')    # arc
+    merged.append('yes')    # sparc
+
+    # Return merged row
+    return merged
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])     
