@@ -28,6 +28,7 @@ def main(argv: list) -> None:
             next(reader)
             for row in reader:
                 sparc_list.append(process_sparc(row))
+        input_rows = len(sparc_list)
     else:
         print(f"error: invalid SpArc file {argv[0]}")
         return
@@ -41,6 +42,7 @@ def main(argv: list) -> None:
             next(reader)
             for row in reader:
                 gform_list.append(process_gform(row))
+        input_rows += len(gform_list)
     else:
         print(f"error: invalid Google Form file {argv[0]}")
         return
@@ -56,8 +58,13 @@ def main(argv: list) -> None:
     merged_list = merge(sparc_list, gform_list)
     with out.open(mode="w") as f:
         writer = csv.writer(f)
-        writer.writerow(["Type", "Name", "zID", "Email", "Arc", "SpArc"])
+        writer.writerow(["Source", "Name", "zID", "Email", "Arc", "SpArc"])
         writer.writerows(merged_list)
+
+    merged_rows = len(merged_list) - len(sparc_list) - len(gform_list)
+    print(f"{merged_rows*2}/{input_rows} rows merged ({merged_rows} merged rows)")
+    print(f"{len(sparc_list)} unmerged rows from {sparc.name}")
+    print(f"{len(gform_list)} unmerged rows from {gform.name}")
 
     print(f"Files have been merged into {out.name}")
 
