@@ -41,7 +41,7 @@ def main(argv: list) -> None:
             reader = csv.reader(f, delimiter=',', quotechar='"')
             next(reader)
             for row in reader:
-                gform_list.append(process_gform(row))
+                add_unique_entry(gform_list, process_gform(row))
         input_rows += len(gform_list)
     else:
         print(f"error: invalid Google Form file {argv[0]}")
@@ -66,7 +66,7 @@ def main(argv: list) -> None:
     print(f"{len(sparc_list)} unmerged rows from {sparc.name}")
     print(f"{len(gform_list)} unmerged rows from {gform.name}")
 
-    print(f"Files have been merged into {out.name}")
+    print(f"Files have been merged into {out.name} ({len(merged_list)} rows)")
 
 
 # Dict fields: names[], email, zid
@@ -88,7 +88,7 @@ def process_sparc(row: list) -> dict:
 
 
 # Dict fields: names[], arc, zid, email, sparc
-def process_gform(row: list) -> None:
+def process_gform(row: list) -> dict:
     # Map row to dictionary
     d = {}
 
@@ -106,6 +106,26 @@ def process_gform(row: list) -> None:
 
     # Return dictionary of row
     return d
+
+
+# Add new row to gform_list without duplicates
+def add_unique_entry(gform_list: list, new: dict) -> None:
+    # Iterate through each row (dict) in gform_list
+    for old in gform_list:
+        # Check if new_entry exists in list by the following conditions:
+        #   - one of: email, zID
+        if new['email'] and old['email'] and new['email'] == old['email']:
+            # If there is a match, remove old entry
+            gform_list.remove(old)
+            break
+
+        elif new['zid'] and new['zid'] == old['zid']:
+            # If there is a match, remove old entry
+            gform_list.remove(old)
+            break
+
+    # Add new entry
+    gform_list.append(new)
 
 
 ### To merge, match any:
@@ -128,20 +148,17 @@ def merge(sparc: list, gform: list) -> list:
 
             # Email match
             if g['email'] and s['email'] == g['email']:
-                # print(f"email match for {' '.join(s['names'])}: {s['email']}")
                 row(s, g)
                 break
 
             # zID match
             elif s['zid'] and s['zid'] == g['zid']:
-                # print(f"zID match for {' '.join(s['names'])}: {s['zid']}")
                 row(s, g)
                 break
 
             # Two names match
             names = set(s['names']).intersection(g['names'])
             if len(names) > 1:
-                # print(f'name match: {names}')
                 row(s, g)
                 break
 
@@ -174,11 +191,7 @@ def merge(sparc: list, gform: list) -> list:
 #   - name:  SpArc
 #   - email: non-zID (default: SpArc)
 ### Fields: Merge Type, Full Name, zID, Email, Arc Member, SpArc
-#   - Type: MERGE   merged row
-#   - Type: SPARC   sparc only row
-#   - Type: GFORM   gform only row
 def merge_row(sparc: dict, gform: dict) -> list:
-    # Merge type is always MERGE because we're merging the files
     merged = ['Merge']
 
     # Use fullname from sparc
