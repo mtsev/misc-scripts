@@ -1,3 +1,8 @@
+/*
+ * Google script to send Google Form responses to Discord via webhook
+ * Modified from https://github.com/Iku/Google-Forms-to-Discord for TACSoc
+ */
+
 /*************************** CONFIGURATION OPTIONS ***************************/
 
 /* Webhook URL */
