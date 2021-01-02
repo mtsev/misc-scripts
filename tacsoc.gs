@@ -1,8 +1,3 @@
-/*
- * Google script to send Google Form responses to Discord via webhook
- * Modified from https://github.com/Iku/Google-Forms-to-Discord for TACSoc
- */
-
 /*************************** CONFIGURATION OPTIONS ***************************/
 
 /* Webhook URL */
@@ -15,6 +10,10 @@ var COLOUR = 0x71FAD3;
 var MENTION_ROLES = [
     "",
 ];
+
+/* Toggle if you also want to mention @here and/or @everyone */
+var HERE = false;
+var EVERYONE = false;
 
 /* The following message will be sent along with the mentions */
 var MESSAGE = "";
@@ -85,7 +84,16 @@ function onSubmit(e) {
         }
     }
 
-    var mentions = "<@&" + MENTION_ROLES.join("> <@&") + "> "
+    var mentions = "";
+    if (MENTION_ROLES.length) {
+        mentions += "<@&" + MENTION_ROLES.join("> <@&") + "> ";
+    }
+    if (HERE) {
+        mentions += "@here ";
+    };
+    if (EVERYONE) {
+        mentions += "@everyone ";
+    };
 
     var options = {
         "method": "post",
